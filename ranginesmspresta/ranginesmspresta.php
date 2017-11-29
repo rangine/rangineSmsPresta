@@ -1114,7 +1114,7 @@ class RangineSmsPresta extends Module
 		if($result['status'] == 'sent') return true; else return false;
 	}
 	protected function connectWebservice($param = array()){
-		$url = "371.130.202.188/services.jspd";
+		$url = "37.130.202.188/services.jspd";
 		if($this->demo()) $url = $this->support.$this->name.'/?demo';
  		$param['uname'] = Configuration::get($this->prefix . 'USERNAME');
         $param['pass'] = Configuration::get($this->prefix . 'PASSWORD');
