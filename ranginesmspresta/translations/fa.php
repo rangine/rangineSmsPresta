@@ -9,8 +9,11 @@ $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_690a9583e39a9678a492a84
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_d2aa4bb79affc88b23057f5ee5ded019'] = 'تنظیمات به روز رسانی نشد!';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_c888438d14855d7d96a2724ee9c306bd'] = 'تنظیمات به روز رسانی شد.';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_f25ef367566f56ee4ac8cab951856ddd'] = 'شماره موبایل معتبر وارد کنید!';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_83b631a82caa979ed59ad617d3a5ae6e'] = 'ارسال دستی پیامک';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_789183b7e98646c11d5f0544c8f3c4c9'] = 'پیامک ارسال شد.';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_f09fb1c185cb2a6f08a10b6745aca668'] = 'پیام خالی است.';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_ce495ab8d79db0d37413d8e95b54e606'] = 'ارسال چندگانه';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_0447b667a6bb3e9937cb3b7bf87b5227'] = 'ارسال به مشتریان';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_f5e9c7d1fdb60994473c274c863373b2'] = 'پیامک به تمام مشتریان ارسال شد.';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_6914e44c35db16d8958c5d50be6e8b6f'] = 'درگاه به درستی پیکربندی شده است.';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_0e8d55d24d7a1c5e5c8da448350f4006'] = 'باقیمانده اعتبار شما در پنل پیامکی خودتان:';
@@ -69,7 +72,15 @@ $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_cfb6437e411440a06d9b49c
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_c65cb34455fcb60090fc24638e5f6cc3'] = 'متن پیامک مشتری هنگام تغییر وضعیت سفارش:';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_d90d1544bcc5eb629a311df7bd7768c9'] = 'نوع متن پیامک ارسالی به مشتری هنگام تغییر وضعیت سفارش را انتخاب نمایید. پیش فرض: متن آماده شده توسط افزونه است. بر اساس الگو: برای ارسال سریع از طریق خطوط خدماتی است. اختصاصی: متنی که در کادر وارد می نمایید.';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_1b4ec313331928a7b5efc1540337bf8a'] = 'متغیرها: {shop_name} {firstname} {lastname} {order_name} {order_state}';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_f1c7bf68388f712b44458d02757d7740'] = 'متن پیامک مشتری هنگام تغییر کد رهگیری سفارش:';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_e4bfb3e5b6db2ea0a483e1051a98d89d'] = 'متغیرها: {shop_name} {firstname} {lastname} {order_name} {carrier}';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_c9cc8cce247e49bae79f15173ce97354'] = 'ذخیره';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_c28639657b4e3352241f83d8b6021e4e'] = 'مشتری جدید';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_6810a1cc40329a394b9d73b5f8dac744'] = 'سفارش جدید';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_10ea517069300c23c17f113a3d084c57'] = 'بروزرسانی وضعیت سفارش';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_eeee68108187fb5d8e8dd60c6b180efd'] = 'پیامک ارسال شد.';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_2920a42204fe8256643621d525b936be'] = 'پیامک ارسال نشد. خطا: ';
+$_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_b1cc4f8b9c50dafcb6e685c5e38d2d12'] = 'تغییر شماره رهگیری مرسوله';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_96a09509438e4562fe23e5430d36f865'] = '{firstname} {lastname} در سایت ثبت نام کرد';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_711cc5e54ad5f93da9887df412f0dbad'] = '{firstname} {lastname} عزیز,~به سایت ما خوش آمدید.';
 $_MODULE['<{ranginesmspresta}prestashop>ranginesmspresta_304bec5dd4b1beeb89af2486620a7a51'] = 'نام کاربری یا رمز عبور اشتباه است!';

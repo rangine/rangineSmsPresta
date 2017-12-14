@@ -26,9 +26,10 @@ class RangineSmsPresta extends Module
     private $prefix;
     public function __construct()
     {
+        $this->preload();
         $this->name          = 'ranginesmspresta';
         $this->tab           = 'emailing';
-        $this->version       = '1.1.1';
+        $this->version       = '1.1.2';
         $this->author        = 'Hadi Mollaei';
         $this->support        = 'http://rangine.ir/';
         $this->need_instance = 0;
@@ -45,6 +46,7 @@ class RangineSmsPresta extends Module
         $this->PSversion = Configuration::get('PS_INSTALL_VERSION');
         $this->shop = Configuration::get('PS_SHOP_NAME');
         $this->domain = Configuration::get('PS_SHOP_DOMAIN');
+        // Some long messages that make the code messy. TODO: May I can bring all messages here?!
         $this->text = array(
             'NEWACADTEXT' => '{firstname} {lastname} registred on site',
             'NEWACCUTEXT' => 'Dear {firstname} {lastname},~Welcome to our site.',
@@ -52,11 +54,15 @@ class RangineSmsPresta extends Module
             ' {order_name}~Payment: {payment}~Total: ({total_paid} {currency})',
             'NEWORCUTEXT' => '{shop_name}~Customer: {firstname} {lastname}~Order:'.
             '{order_name}~Payment: {payment}~Total: ({total_paid} {currency})',
-            'NEWORCUTEXT' => '{shop_name}~Dear {firstname} {lastname},'.
+            'UPORCUTEXT' => '{shop_name}~Dear {firstname} {lastname},'.
             '~New status for order: {order_name}: {order_state}',
+            'UPORTRTEXT' => 'Dear {firstname} {lastname},~Your order has sent by {carrier}'.
+            '~Order: {order_name}~Tracking No: {tracking}~{shop_name}',
             'NewOrderTextDesc' => 'Variables: {firstname} {lastname} {order_name} {payment} {total_paid} {currency}',
             'NewOrderCustomerTextDesc' => 'Variables: {firstname} {lastname} '.
             '{order_name} {payment} {total_paid} {currency}',
+            'UpdateOrderTrackingHint' => 'Select which type you want to send to customer'.
+            'on update order tracking number.',
         );
         foreach ($this->text as $key => $text) {
             $this->text[$key] = $this->l($text);
@@ -65,6 +71,9 @@ class RangineSmsPresta extends Module
 
     public function install()
     {
+        if (!extension_loaded('curl')) {
+            return false;
+        }
         if (!$this->installConfig()) {
             return false;
         }
@@ -74,8 +83,12 @@ class RangineSmsPresta extends Module
         if (!parent::install() or
             !$this->registerHook('actionValidateOrder') or
             !$this->registerHook('actionOrderStatusPostUpdate') or
-            !$this->registerHook('updateQuantity') or
-            !$this->registerHook('actionCustomerAccountAdd')) {
+            !$this->registerHook('actionAdminOrdersTrackingNumberUpdate') or
+            !$this->registerHook('actionAdminControllerSetMedia') or
+            !$this->registerHook('actionUpdateQuantity') or
+            !$this->registerHook('actionProductOutOfStock') or
+            !$this->registerHook('actionCustomerAccountAdd') or
+            !$this->installModuleTab($this->name, array(1 => $this->displayName), 16)) {
             return false;
         }
         return true;
@@ -92,35 +105,40 @@ class RangineSmsPresta extends Module
         if (!parent::uninstall()) {
             return false;
         }
+        if (!$this->uninstallModuleTab($this->name)) {
+            return false;
+        }
 
         return true;
     }
 
     protected function installConfig()
     {
-        if (!Configuration::updateValue($this->prefix . 'USERNAME', '') or
-            !Configuration::updateValue($this->prefix . 'PASSWORD', '') or
+        if (!Configuration::updateValue($this->prefix . 'USERNAME', 'demo') or
+            !Configuration::updateValue($this->prefix . 'PASSWORD', 'demo') or
             !Configuration::updateValue($this->prefix . 'ADMINPHONE', '') or
-            !Configuration::updateValue($this->prefix . 'SMSNUMBER', '') or
-            !Configuration::updateValue($this->prefix . 'SMSSENUMBER', '') or
-            !Configuration::updateValue($this->prefix . 'SMSENABLE', '0') or
+            !Configuration::updateValue($this->prefix . 'SMSNUMBER', '100009') or
+            !Configuration::updateValue($this->prefix . 'SMSSENUMBER', '5000125475') or
+            !Configuration::updateValue($this->prefix . 'SMSENABLE', '1') or
             !Configuration::updateValue($this->prefix . 'NEWORDERA', '1') or
-            !Configuration::updateValue($this->prefix . 'NEWORDERC', '0') or
+            !Configuration::updateValue($this->prefix . 'NEWORDERC', '1') or
             !Configuration::updateValue($this->prefix . 'UPDATEORDERC', '1') or
             !Configuration::updateValue($this->prefix . 'NEWCUSTOMERA', '1') or
             !Configuration::updateValue($this->prefix . 'NEWCUSTOMERC', '0') or
             !Configuration::updateValue($this->prefix . 'NEWORDERFC', '0') or
             !Configuration::updateValue($this->prefix . 'NEWORDERFA', '0') or
-            !Configuration::updateValue($this->prefix . 'NEWACADTEXT', $this->text['NEWACADTEXT']) or
             !Configuration::updateValue($this->prefix . 'NEWACADTETYPE', 'default') or
-            !Configuration::updateValue($this->prefix . 'NEWACCUTEXT', $this->text['NEWACCUTEXT']) or
+            !Configuration::updateValue($this->prefix . 'NEWACADTEXT', $this->text['NEWACADTEXT']) or
             !Configuration::updateValue($this->prefix . 'NEWACCUTETYPE', 'default') or
+            !Configuration::updateValue($this->prefix . 'NEWACCUTEXT', $this->text['NEWACCUTEXT']) or
             !Configuration::updateValue($this->prefix . 'NEWORADTETYPE', 'default') or
             !Configuration::updateValue($this->prefix . 'NEWORADTEXT', $this->text['NEWORADTEXT']) or
             !Configuration::updateValue($this->prefix . 'NEWORCUTETYPE', 'default') or
             !Configuration::updateValue($this->prefix . 'NEWORCUTEXT', $this->text['NEWORCUTEXT']) or
             !Configuration::updateValue($this->prefix . 'UPORCUTETYPE', 'default') or
-            !Configuration::updateValue($this->prefix . 'UPORCUTEXT', $this->text['NEWORCUTEXT'])) {
+            !Configuration::updateValue($this->prefix . 'UPORCUTEXT', $this->text['UPORCUTEXT']) or
+            !Configuration::updateValue($this->prefix . 'UPORTRTETYPE', 'default') or
+            !Configuration::updateValue($this->prefix . 'UPORTRTEXT', $this->text['UPORTRTEXT'])) {
                 return false;
         }
 
@@ -142,16 +160,18 @@ class RangineSmsPresta extends Module
             !Configuration::deleteByName($this->prefix . 'NEWCUSTOMERC') or
             !Configuration::deleteByName($this->prefix . 'NEWORDERFC') or
             !Configuration::deleteByName($this->prefix . 'NEWORDERFA') or
-            !Configuration::deleteByName($this->prefix . 'NEWACADTEXT') or
             !Configuration::deleteByName($this->prefix . 'NEWACADTETYPE') or
-            !Configuration::deleteByName($this->prefix . 'NEWACCUTEXT') or
+            !Configuration::deleteByName($this->prefix . 'NEWACADTEXT') or
             !Configuration::deleteByName($this->prefix . 'NEWACCUTETYPE') or
+            !Configuration::deleteByName($this->prefix . 'NEWACCUTEXT') or
             !Configuration::deleteByName($this->prefix . 'NEWORADTETYPE') or
             !Configuration::deleteByName($this->prefix . 'NEWORADTEXT') or
             !Configuration::deleteByName($this->prefix . 'NEWORCUTETYPE') or
             !Configuration::deleteByName($this->prefix . 'NEWORCUTEXT') or
             !Configuration::deleteByName($this->prefix . 'UPORCUTETYPE') or
-            !Configuration::deleteByName($this->prefix . 'UPORCUTEXT')) {
+            !Configuration::deleteByName($this->prefix . 'UPORCUTEXT') or
+            !Configuration::deleteByName($this->prefix . 'UPORTRTETYPE') or
+            !Configuration::deleteByName($this->prefix . 'UPORTRTEXT')) {
                 return false;
         }
 
@@ -162,9 +182,13 @@ class RangineSmsPresta extends Module
     {
         $sql = 'CREATE TABLE IF NOT EXISTS `' . _DB_PREFIX_ . $this->name . '`(
                 `id_' . $this->name . '` INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                `status` VARCHAR(256) NOT NULL ,
+                `customer` INT(5) DEFAULT NULL ,
+                `phone` VARCHAR(100) DEFAULT NULL ,
+                `position` VARCHAR(50) DEFAULT NULL ,
+                `status` VARCHAR(15) NOT NULL ,
                 `bulk` varchar(50) DEFAULT NULL,
-                `description` TEXT NOT NULL
+                `delivery` varchar(50) DEFAULT NULL,
+                `description` TEXT DEFAULT NULL
                  )ENGINE=' . _MYSQL_ENGINE_ . ' DEFAULT CHARSET=utf8';
         return Db::getInstance()->execute($sql);
     }
@@ -173,6 +197,65 @@ class RangineSmsPresta extends Module
     {
         $sql = 'DROP TABLE IF EXISTS `' . _DB_PREFIX_ . $this->name . '`';
         return Db::getInstance()->execute($sql);
+    }
+
+    /**
+     * Create plugin tab. Called from install function.
+     *
+     * @param string $tabClass
+     * @param string $tabName
+     * @param array $idTabParent
+     * @return bool
+     */
+    private function installModuleTab($tabClass, $tabName, $idTabParent)
+    {
+        $partab             = new Tab();
+        $partab->name       = $tabName;
+        $partab->class_name = $tabClass;
+        $partab->module     = $this->name;
+        $partab->id_parent  = $idTabParent;
+        if ($partab->save()) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Delete plugin tab. Called from uninstall function.
+     *
+     * @param string $tabClass
+     * @return bool
+     */
+    private function uninstallModuleTab($tabClass)
+    {
+        $sql = 'SELECT id_tab FROM ' . _DB_PREFIX_ . 'tab WHERE class_name = "' . pSQL($tabClass) . '"';
+        if ($results = Db::getInstance()->ExecuteS($sql)) {
+            foreach ($results as $row) {
+                $idTab = $row['id_tab'];
+                if ($idTab != 0) {
+                    $tab = new Tab((int)$idTab);
+                    $tab->delete();
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Initialization function called from Constructor.
+     */
+    public function preload()
+    {
+        if (Tools::getValue('controller') != ''
+            && (Tools::getValue('controller') == 'ranginesmspresta'
+            || Tools::getValue('controller') == 'ranginesmspresta')) {
+                $token   = Tools::getAdminTokenLite('AdminModules');
+                $request_scheme = $_SERVER['REQUEST_SCHEME'] ? $_SERVER['REQUEST_SCHEME'] : 'http';
+                $hostlink = $request_scheme . "://" . $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF'];
+                $ctrlconfi = "?controller=AdminModules&configure=" . Tools::getValue('controller');
+                $urlLink = $hostlink . $ctrlconfi ."&token=" . $token;
+                Tools::redirect($urlLink);
+        }
     }
 
     public function getContent()
@@ -231,7 +314,10 @@ class RangineSmsPresta extends Module
             'NEWORCUTETYPE',
             'NEWORCUTEXT',
             'UPORCUTETYPE',
-            'UPORCUTEXT');
+            'UPORCUTEXT',
+            'UPORTRTETYPE',
+            'UPORTRTEXT',
+            );
             foreach ($_POST as $key => $value) {
                 if (!in_array($key, $variables)) {
                     continue;
@@ -253,7 +339,7 @@ class RangineSmsPresta extends Module
                 $errors[] = Tools::displayError($this->l('insert valid phone number'));
             } else {
                 $text = Tools::getValue('SENDONETEXT');
-                $result=$this->sendOne($text, $phones);
+                $result=$this->sendOne($text, $phones, '-', $this->l('Send SMS Manual'));
                 if ($result !='sent') {
                     $errors[]=Tools::displayError($result);
                 }
@@ -271,7 +357,7 @@ class RangineSmsPresta extends Module
             }
             $phones=$this->getPhoneMobiles();
 
-            $result=$this->sendOne($text, $phones);
+            $result=$this->sendOne($text, $phones, $this->l('multiple'), $this->l('Send Customers'));
             if ($result !='sent') {
                 $errors[]=Tools::displayError($result);
             }
@@ -767,6 +853,36 @@ class RangineSmsPresta extends Module
                         'class' => 'fixed-width-lg',
                         'desc' => $this->l('Variables: {shop_name} {firstname} {lastname} {order_name} {order_state}'),
                     ),
+                    array(
+                        'type' => 'radio',
+                        'label' => $this->l('Text for Customer on Update Order Tracking:'),
+                        'name' => 'UPORTRTETYPE',
+                        'hint' => $this->l($this->text['UpdateOrderTrackingHint']),
+                        'values' => array(
+                            array(
+                                'id' => 'default',
+                                'value' => 'default',
+                                'label' => $this->l('default')
+                            ),
+                            array(
+                                'id' => 'sample',
+                                'value' => 'sample',
+                                'label' => $this->l('By Sample')
+                            ),
+                            array(
+                                'id' => 'custom',
+                                'value' => 'custom',
+                                'label' => $this->l('Custom')
+                            ),
+                        )
+                    ),
+                    array(
+                        'type' => 'textarea',
+                        'label' => $this->l('Custom Text:'),
+                        'name' => 'UPORTRTEXT',
+                        'class' => 'fixed-width-lg',
+                        'desc' => $this->l('Variables: {shop_name} {firstname} {lastname} {order_name} {carrier}'),
+                    ),
                 ),
                 'submit' => array(
                     'title' => $this->l('Save'),
@@ -784,7 +900,7 @@ class RangineSmsPresta extends Module
         $this->fields_form = array();
         $helper->id = (int)Tools::getValue('id_carrier');
         $helper->identifier = $this->identifier;
-        $helper->submit_action = 'ranginesmspresta';
+        $helper->submit_action = $this->name;
         $helper->currentIndex = $this->context->link->getAdminLink('AdminModules', false).
         '&configure='.$this->name.'&tab_module='.$this->tab.'&module_name='.$this->name;
         $helper->token = Tools::getAdminTokenLite('AdminModules');
@@ -832,6 +948,8 @@ class RangineSmsPresta extends Module
             'NEWORCUTEXT' => Tools::getValue('NEWORCUTEXT', Configuration::get($this->prefix .'NEWORCUTEXT')),
             'UPORCUTETYPE' => Tools::getValue('UPORCUTETYPE', Configuration::get($this->prefix .'UPORCUTETYPE')),
             'UPORCUTEXT' => Tools::getValue('UPORCUTEXT', Configuration::get($this->prefix .'UPORCUTEXT')),
+            'UPORTRTETYPE' => Tools::getValue('UPORTRTETYPE', Configuration::get($this->prefix .'UPORTRTETYPE')),
+            'UPORTRTEXT' => Tools::getValue('UPORTRTEXT', Configuration::get($this->prefix .'UPORTRTEXT')),
         );
     }
     public function hookActionCustomerAccountAdd($params)
@@ -866,7 +984,7 @@ class RangineSmsPresta extends Module
             if (!$text = $this->generateSMStext($vars, 'newacount', 'admin')) {
                 return true;
             }
-            $this->sendOne($text, Configuration::get($this->prefix . 'ADMINPHONE'));
+            $this->sendOne($text, $AdminPhone, '-', $this->l('New Customer'));
         }
         if (Configuration::get($this->prefix.'NEWCUSTOMERC')!=0) {
             $id_address      = Address::getFirstCustomerAddressId($newCustomer['id']);
@@ -879,7 +997,7 @@ class RangineSmsPresta extends Module
             if (!$text = $this->generateSMStext($vars, 'newacount', 'customer')) {
                 return;
             }
-            $this->sendOne($text, $phone, 'neworder');
+            $this->sendOne($text, $phone, $newCustomer['id'], $this->l('New Customer'));
         }
         return true;
     }
@@ -923,8 +1041,8 @@ class RangineSmsPresta extends Module
             if (!$text = $this->generateSMStext($vars, 'neworder', 'admin')) {
                 return true;
             }
-
-            $this->sendOne($text, Configuration::get($this->prefix . 'ADMINPHONE'));
+            $AdminPhone = Configuration::get($this->prefix . 'ADMINPHONE');
+            $this->sendOne($text, $AdminPhone, '-', $this->l('New Order'));
         }
 
         if (Configuration::get($this->prefix . 'NEWORDERC') != 0) {
@@ -942,14 +1060,17 @@ class RangineSmsPresta extends Module
             if (!$text = $this->generateSMStext($vars, 'neworder', 'customer')) {
                 return true;
             }
-
-            $this->sendOne($text, $phone);
+            $this->sendOne($text, $phone, $customer->id, $this->l('New Order'));
         }
         return true;
     }
 
     public function hookActionOrderStatusPostUpdate($params)
     {
+        $customer_alert = Tools::getValue('customer_alert');
+        if (!$this->enable or $customer_alert != 'on') {
+            return true;
+        }
         if (!$this->enable) {
             return true;
         }
@@ -962,7 +1083,6 @@ class RangineSmsPresta extends Module
         if (Configuration::get($this->prefix . 'UPDATEORDERC') == 0) {
             return true;
         }
-
         $order      = new Order((int) ($params['id_order']));
         $orderstate = $params['newOrderStatus'];
 
@@ -989,8 +1109,58 @@ class RangineSmsPresta extends Module
             return;
         }
 
-        $this->sendOne($text, $address->phone_mobile);
+        $smsResult = $this->sendOne($text, $address->phone_mobile, $customer->id, $this->l('Update Order Status'));
+        if ($smsResult == 'sent') {
+            $this->adminDisplayInformation($this->l('The sms has sent.'));
+        } else {
+            $this->adminDisplayWarning($this->l('The sms can\'t be sent. Error: ') . $smsResult);
+        }
+        return true;
+    }
+    public function hookActionProductOutOfStock($params)
+    {
+        //TODO: send sms to admin on out of stock product
+        return true;
+    }
+    public function hookactionUpdateQuantity($params)
+    {
+        //TODO: send sms to admin on return product to stock
+        return true;
+    }
+    public function hookactionAdminOrdersTrackingNumberUpdate($params)
+    {
+        $customer_alert = Tools::getValue('customer_alert');
+        if (!$this->enable or $customer_alert != 'on') {
+            return true;
+        }
+        $order = $params['order'];
+        $customer = $params['customer'];
+        $carrier = $params['carrier'];
+        $carrier = $params['carrier'];
+        $id_address = Address::getFirstCustomerAddressId($customer->id);
+        $address = new Address((int)($id_address));
+        if ($address->phone_mobile == null) {
+            return true;
+        }
+        $vars = array(
+            '{firstname}' => ($customer->firstname),
+            '{lastname}' => ($customer->lastname),
+            '{order_name}' => sprintf("%06d", $order->id),
+            '{shop_name}' => Configuration::get('PS_SHOP_NAME'),
+            '{carrier}' => $carrier->name,
+            '{tracking}' => $order->shipping_number,
+        );
 
+        if (!$text = $this->generateSMStext($vars, 'updateOrderTracking', 'customer')) {
+            return;
+        }
+
+        $smsResult = $this->sendOne($text, $address->phone_mobile, $customer->id, $this->l('Update Tracking Number'));
+        if ($smsResult == 'sent') {
+            $this->adminDisplayInformation($this->l('The sms has sent.'));
+        } else {
+            $this->adminDisplayWarning($this->l('The sms can\'t be sent. Error: ') . $smsResult);
+        }
         return true;
     }
     /** generate text message
@@ -1057,15 +1227,32 @@ class RangineSmsPresta extends Module
                     }
                     break;
                 case 'updateorder':
-                    $type = Configuration::get($this->prefix .'UPORCUTETYPE');
+                    $type = Configuration::get($this->prefix .'UPORTRTETYPE');
                     if ($type == 'custom') {
-                        $massage = Configuration::get($this->prefix .'UPORCUTEXT');
+                        $massage = Configuration::get($this->prefix .'UPORTRTEXT');
                     } elseif ($type == 'sample' and $serviceLineStatus) {
                         $massage = "patterncode:152;name:{firstname} {lastname};order:{order_name};";
                         $massage .= "status:{order_state};company:{shop_name}";
                     } else {
                         $massage = '{shop_name}~Dear {firstname} {lastname},';
                         $massage .= '~New status for order: {order_name}: {order_state}';
+                        $massage = $this->l($massage);
+                    }
+                    break;
+                case 'updateOrderTracking':
+                    $type = Configuration::get($this->prefix .'UPORTRTETYPE');
+                    if ($type == 'custom') {
+                        $massage = Configuration::get($this->prefix .'UPORTRTEXT');
+                    } elseif ($type == 'sample' and $serviceLineStatus) {
+                        $massage = "patterncode:165;name:{firstname} {lastname};order:{order_name};";
+                        $massage .= "service:{carrier};company:{shop_name};";
+                        $massage .= "tracking-code:{tracking}";
+                    } else {
+                        $massage = 'Dear {firstname} {lastname},';
+                        $massage .= '~Your order has sent by {carrier}';
+                        $massage .= '~Order: {order_name}';
+                        $massage .= '~Tracking No: {tracking}';
+                        $massage .= '~{shop_name}';
                         $massage = $this->l($massage);
                     }
                     break;
@@ -1081,9 +1268,12 @@ class RangineSmsPresta extends Module
      * @param string logs form webservice
      * @return boolean
      */
-    public function saveLogs($status, $description, $bulk = null)
+    public function saveLogs($status, $description, $bulk = null, $phone = null, $customer = null, $position = null)
     {
         $fields = array(
+            'customer' => pSQL($customer),
+            'phone' => pSQL($phone),
+            'position' => pSQL($position),
             'status' => pSQL($status),
             'bulk' => pSQL($bulk),
             'description' => pSQL($description)
@@ -1216,7 +1406,7 @@ class RangineSmsPresta extends Module
             return false;
         }
     }
-    protected function sendOne($text, $phonenumber)
+    protected function sendOne($text, $phonenumber, $customer = null, $position = null)
     {
         //If text is sample
         if (Tools::substr($text, 0, 11) === "patterncode") {
@@ -1238,10 +1428,16 @@ class RangineSmsPresta extends Module
                     );
                 $res = $this -> connectWebservice($param);
                 if ($res['status'] == 'sent') {
-                    $this->saveLogs($res['status'], 'Text:' . $text, $res['result']);
+                    $status = $res['status'];
+                    $description = 'pattern:' . $text;
+                    $bulk = $res['result'];
+                    $this->saveLogs($status, $description, $bulk, $phonenumber, $customer, $position);
                     return 'sent';
                 } else {
-                    $this->saveLogs('failed', 'Text:' . $text . ' - error: ' . $res['result'], null);
+                    $status = 'failed';
+                    $description = 'Text:' . $text . ' - error: ' . $res['result'];
+                    $bulk = '-';
+                    $this->saveLogs($status, $description, $bulk, $phonenumber, $customer, $position);
                     return $res['result'];
                 }
             }
@@ -1268,10 +1464,10 @@ class RangineSmsPresta extends Module
                 } else {
                     $result = $res_data.' - Error Code:'.$res_code;
                 }
-                $this->saveLogs($status, $text);
+                $this->saveLogs($status, $text, '-', $toNum, $customer, $position);
             } else {
                 $status = $result = 'sent';
-                $this->saveLogs($status, $text, $response);
+                $this->saveLogs($status, $text, $response, $toNum, $customer, $position);
             }
             return $result;
         }
@@ -1284,7 +1480,13 @@ class RangineSmsPresta extends Module
                         'op'=> 'send'
                     );
         $connectpanel = $this -> connectWebservice($param);
-        $this->saveLogs($connectpanel['status'], 'Text:' . $text, $connectpanel['res_data']);
+        if (count($rcpt_nm) > 5) {
+            $phonenumber = 'multiple';
+        }
+        $status = $connectpanel['status'];
+        $description = 'Text:' . $text;
+        $bulk = $connectpanel['res_data'];
+        $this->saveLogs($status, $description, $bulk, $phonenumber, $customer, $position);
         return $connectpanel['result'];
     }
     public function sendSMS($param = array())
@@ -1390,5 +1592,20 @@ class RangineSmsPresta extends Module
                 break;
         }
         return $result;
+    }
+    
+    /**
+    * Add the CSS & JavaScript files you want to be loaded in the BO.
+    */
+    public function hookActionAdminControllerSetMedia($params)
+    {
+        if (Tools::getValue('controller') == 'AdminOrders') {
+            $this->context->controller->addJS($this->_path.'views/js/adminorders.js');
+        }
+        if (Tools::getValue('controller') == 'AdminCustomers' and Tools::getValue('id_customer')) {
+            $this->context->controller->addJS($this->_path.'views/js/admincustomers.js');
+        } elseif (Tools::getValue('controller') == 'AdminCustomers') {
+            $this->context->controller->addJS($this->_path.'views/js/editcustomer.js');
+        }
     }
 }
